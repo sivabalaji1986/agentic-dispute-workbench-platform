@@ -39,7 +39,7 @@ agentic-dispute-workbench-platform/
 | A2A Java SDK | `io.a2a:a2a-core`, `a2a-client`, `a2a-server` | latest GA from `a2aproject/a2a-java` |
 | spring-ai-a2a | `org.springaicommunity:spring-ai-a2a-server-autoconfigure` | latest compatible with Spring AI 2.0 |
 | AG-UI core types | `com.ag-ui:core` | 0.0.1 (types only — see §6) |
-| Jackson | `tools.jackson.*` | 3.x (Boot 4 default — NOT `com.fasterxml`) |
+| Jackson | `tools.jackson.core` / `tools.jackson.databind` | 3.x (Boot 4 default — see package note below) |
 | PostgreSQL driver | `postgresql` | Boot 4 managed |
 | Spring Data JPA | `spring-boot-starter-data-jpa` | Boot 4 managed |
 | Spring WebFlux | `spring-boot-starter-webflux` | Boot 4 managed (orchestrator only) |
@@ -47,9 +47,22 @@ agentic-dispute-workbench-platform/
 | Testcontainers | `testcontainers-bom` | latest compatible with Boot 4 |
 | JUnit | JUnit 5 only — JUnit 4 removed in Boot 4 | — |
 
-**Jackson 3 package rename** (Boot 4 breaking change): all imports use
-`tools.jackson.core`, `tools.jackson.databind`, `tools.jackson.annotation`.
-Never `com.fasterxml.jackson.*` anywhere in the platform.
+**Jackson 3 package rename** (Boot 4 breaking change): `ObjectMapper` and all
+core streaming/databind types use `tools.jackson.core.*` / `tools.jackson.databind.*`.
+Never `com.fasterxml.jackson.core` or `com.fasterxml.jackson.databind` anywhere
+in the platform — mixing Jackson 2 and Jackson 3 core/databind classes is
+binary-incompatible and fails at runtime.
+
+**Correction (verified against Maven Central 2026-07-15):** the
+`jackson-annotations` module was **not** renamed in Jackson 3. Jackson 3's own
+`jackson-base` POM depends on it verbatim ("depends on Jackson 2.x
+annotations"), and `tools.jackson.core:jackson-annotations` does not exist as
+a published artifact (404 on Maven Central). Annotation types —
+`@JsonProperty`, `@JsonInclude`, `@JsonIgnoreProperties`, etc. — are imported
+from `com.fasterxml.jackson.annotation.*` even in a pure Jackson-3/Boot-4
+codebase. This is the one permitted exception to the "never
+`com.fasterxml.jackson.*`" rule; it applies only to the `annotation`
+subpackage, never to `.core` or `.databind`.
 
 **Build:** Maven multi-module. Parent POM manages all versions via BOMs.
 Child modules inherit; no version declared in child POMs except for
