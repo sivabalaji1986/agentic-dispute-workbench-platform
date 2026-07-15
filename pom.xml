@@ -46,6 +46,7 @@
   <modules>
     <module>workbench-common</module>
     <module>agui-support</module>
+    <module>contract-tests</module>
     <module>case-system-mcp</module>
     <module>case-review-agent</module>
     <module>policy-agent</module>

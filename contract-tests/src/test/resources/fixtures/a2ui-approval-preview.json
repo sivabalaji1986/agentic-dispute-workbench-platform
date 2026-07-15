@@ -1,0 +1,1 @@
+{"id":"approval-1","component":"ApprovalPreview","caseId":"D-10291","newCaseStatus":"Pending Evidence","missingItems":["Customer declaration","Delivery / non-delivery proof"],"actionAfterApproval":"Create task in case system and update case status.","onApprove":{"id":"approve_task_creation"},"onEdit":{"id":"edit_task_creation"},"onCancel":{"id":"cancel_task_creation"}}

@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>com.workbench</groupId>
+    <artifactId>agentic-dispute-workbench-platform</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>contract-tests</artifactId>
+  <packaging>jar</packaging>
+
+  <!--
+    Not a Spring Boot app — plain Java + JUnit 5 + Jackson 3, test-only. Depends
+    on workbench-common and agui-support at test scope to exercise their real
+    builders/records against frozen fixture JSON in src/test/resources/fixtures,
+    so serialization drift (a renamed field, a changed case) is caught here
+    immediately, rather than in Session 5 when the orchestrator wires everything
+    together against the real UI contract.
+  -->
+
+  <dependencies>
+    <dependency>
+      <groupId>com.workbench</groupId>
+      <artifactId>workbench-common</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.workbench</groupId>
+      <artifactId>agui-support</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>tools.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+</project>

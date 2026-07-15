@@ -1,0 +1,1 @@
+{"type":"STATE_DELTA","delta":[{"op":"replace","path":"/evidenceReadiness","value":"2 of 4 required items present"}]}
