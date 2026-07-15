@@ -63,6 +63,10 @@ public final class A2uiComponents {
             @JsonProperty("id") String id,
             @JsonProperty("component") String component,
             @JsonProperty("items") List<EvidenceItem> items) {
+
+        private EvidenceChecklistEntry {
+            items = items == null ? List.of() : List.copyOf(items);
+        }
     }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)

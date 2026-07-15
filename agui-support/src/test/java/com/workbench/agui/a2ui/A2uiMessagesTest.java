@@ -7,6 +7,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -106,5 +107,19 @@ class A2uiMessagesTest {
         assertEquals("Pending Evidence", node.get("caseStatus").asString());
         assertEquals("Created", node.get("auditEntry").asString());
         assertEquals("Dispute Operations Queue", node.get("nextOwner").asString());
+    }
+
+    @Test
+    void evidenceChecklistDefensivelyCopiesItemsList() {
+        List<EvidenceItem> mutableItems = new ArrayList<>();
+        mutableItems.add(new EvidenceItem("Transaction record", true));
+
+        Object checklist = A2uiComponents.evidenceChecklist("checklist-1", mutableItems);
+        mutableItems.add(new EvidenceItem("Merchant response", true));
+
+        String json = objectMapper.writeValueAsString(checklist);
+        JsonNode node = objectMapper.readTree(json);
+
+        assertEquals(1, node.get("items").size());
     }
 }
