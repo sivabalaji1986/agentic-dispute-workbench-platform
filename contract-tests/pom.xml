@@ -11,6 +11,7 @@
 
   <artifactId>contract-tests</artifactId>
   <packaging>jar</packaging>
+  <skip>false</skip>
 
   <!--
     Not a Spring Boot app — plain Java + JUnit 5 + Jackson 3, test-only. Depends
