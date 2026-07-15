@@ -57,7 +57,12 @@ public class CaseReviewAgentExecutor {
         progressLines.add("Transaction found for " + transactionAmount);
         progressLines.add("Merchant response available");
 
-        Map<String, Object> documentsResponse = caseMcpClient.listCaseDocuments(caseId);
+        Map<String, Object> documentsResponse;
+        try {
+            documentsResponse = caseMcpClient.listCaseDocuments(caseId);
+        } catch (RuntimeException e) {
+            return errorResponse(caseId, "Unable to retrieve case documents: " + caseId);
+        }
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> documents =
                 (List<Map<String, Object>>) documentsResponse.getOrDefault("documents", List.of());
@@ -112,8 +117,9 @@ public class CaseReviewAgentExecutor {
         Object amountObj = caseData.get("amount");
         Object currencyObj = caseData.get("currency");
         String currency = currencyObj == null ? "" : currencyObj.toString();
-        if (amountObj instanceof BigDecimal bigDecimal) {
-            return (currency + " " + bigDecimal.stripTrailingZeros().toPlainString()).trim();
+        if (amountObj instanceof Number number) {
+            BigDecimal amount = new BigDecimal(number.toString());
+            return (currency + " " + amount.stripTrailingZeros().toPlainString()).trim();
         }
         return (currency + " " + amountObj).trim();
     }
