@@ -1,8 +1,11 @@
 package com.workbench.caseagent;
 
+import io.a2a.server.agentexecution.AgentExecutor;
 import io.a2a.spec.AgentCapabilities;
 import io.a2a.spec.AgentCard;
 import io.a2a.spec.AgentSkill;
+import org.springaicommunity.a2a.server.executor.DefaultAgentExecutor;
+import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -42,5 +45,13 @@ public class CaseReviewAgentApplication {
                 .build();
     }
 
-    // @Bean AgentExecutor is added in Task 3, once CaseReviewAgentExecutor exists.
+    @Bean
+    public AgentExecutor agentExecutor(ChatClient.Builder chatClientBuilder,
+            CaseReviewAgentExecutor caseReviewAgentExecutor) {
+        ChatClient placeholderClient = chatClientBuilder.build();
+        return new DefaultAgentExecutor(placeholderClient, (chat, requestContext) -> {
+            String userMessage = DefaultAgentExecutor.extractTextFromMessage(requestContext.getMessage());
+            return caseReviewAgentExecutor.execute(userMessage);
+        });
+    }
 }
