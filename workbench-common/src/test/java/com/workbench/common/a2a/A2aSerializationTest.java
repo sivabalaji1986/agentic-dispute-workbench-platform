@@ -1,9 +1,11 @@
 package com.workbench.common.a2a;
 
+import com.workbench.common.agui.EvidenceItem;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -17,7 +19,8 @@ class A2aSerializationTest {
     void caseReviewResultRoundTripsWithCamelCaseFieldNames() {
         CaseReviewResult original = new CaseReviewResult(
                 "D-10291", true, "SGD 250", "available", "Item was delivered",
-                List.of("TRANSACTION_RECORD", "MERCHANT_RESPONSE"), "OPEN");
+                List.of(new EvidenceItem("Transaction record", true), new EvidenceItem("Merchant response", true)),
+                "OPEN");
 
         String json = objectMapper.writeValueAsString(original);
 
@@ -26,11 +29,25 @@ class A2aSerializationTest {
         assertTrue(json.contains("\"transactionAmount\":\"SGD 250\""));
         assertTrue(json.contains("\"merchantResponse\":\"available\""));
         assertTrue(json.contains("\"merchantPosition\":\"Item was delivered\""));
-        assertTrue(json.contains("\"availableDocuments\":[\"TRANSACTION_RECORD\",\"MERCHANT_RESPONSE\"]"));
+        assertTrue(json.contains(
+                "\"availableDocuments\":[{\"label\":\"Transaction record\",\"present\":true},"
+                        + "{\"label\":\"Merchant response\",\"present\":true}]"));
         assertTrue(json.contains("\"caseStatus\":\"OPEN\""));
 
         CaseReviewResult roundTripped = objectMapper.readValue(json, CaseReviewResult.class);
         assertEquals(original, roundTripped);
+    }
+
+    @Test
+    void caseReviewResultDefensivelyCopiesAvailableDocuments() {
+        List<EvidenceItem> mutableDocs = new ArrayList<>();
+        mutableDocs.add(new EvidenceItem("Transaction record", true));
+
+        CaseReviewResult result = new CaseReviewResult(
+                "D-10291", true, "SGD 250", "available", "Item was delivered", mutableDocs, "OPEN");
+        mutableDocs.add(new EvidenceItem("Merchant response", true));
+
+        assertEquals(1, result.availableDocuments().size());
     }
 
     @Test
@@ -53,6 +70,18 @@ class A2aSerializationTest {
 
         PolicyResult roundTripped = objectMapper.readValue(json, PolicyResult.class);
         assertEquals(original, roundTripped);
+    }
+
+    @Test
+    void policyResultDefensivelyCopiesRequiredEvidence() {
+        List<String> mutableEvidence = new ArrayList<>();
+        mutableEvidence.add("TRANSACTION_RECORD");
+
+        PolicyResult result = new PolicyResult(
+                "GOODS_NOT_RECEIVED", "Section 4.2", "Interpretation", mutableEvidence, "Outcome");
+        mutableEvidence.add("MERCHANT_RESPONSE");
+
+        assertEquals(1, result.requiredEvidence().size());
     }
 
     @Test

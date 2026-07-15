@@ -11,4 +11,8 @@ public record PolicyResult(
         String policyInterpretation,
         List<String> requiredEvidence,
         String policyOutcome) {
+
+    public PolicyResult {
+        requiredEvidence = requiredEvidence == null ? List.of() : List.copyOf(requiredEvidence);
+    }
 }
