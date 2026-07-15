@@ -16,7 +16,7 @@ public class EvidenceDocumentEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "doc_id")
-    private Long docId;
+    private Integer docId;
 
     @Column(name = "case_id")
     private String caseId;
@@ -30,11 +30,11 @@ public class EvidenceDocumentEntity {
     @Column(name = "uploaded_at")
     private OffsetDateTime uploadedAt;
 
-    public Long getDocId() {
+    public Integer getDocId() {
         return docId;
     }
 
-    public void setDocId(Long docId) {
+    public void setDocId(Integer docId) {
         this.docId = docId;
     }
 

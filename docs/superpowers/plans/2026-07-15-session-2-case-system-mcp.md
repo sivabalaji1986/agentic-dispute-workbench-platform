@@ -377,7 +377,7 @@ git commit -m "Add case-system-mcp module scaffold, infra seed SQL, and -paramet
 
 **Interfaces:**
 - Consumes: nothing new (plain JPA over the schema from Task 1).
-- Produces: `CaseRepository extends JpaRepository<CaseEntity, String>`; `EvidenceDocumentRepository` with `List<EvidenceDocumentEntity> findByCaseId(String)`; `TaskRepository` with `Optional<TaskEntity> findByCaseIdAndTaskType(String, String)`; `AuditEntryRepository extends JpaRepository<AuditEntryEntity, Long>` — all consumed by `CaseSystemTools` in Task 3. `TransactionEntity` has no repository this session (not used by any of the five tools; exists so Hibernate's `ddl-auto=validate` can validate the full schema, and so it's available for later sessions).
+- Produces: `CaseRepository extends JpaRepository<CaseEntity, String>`; `EvidenceDocumentRepository extends JpaRepository<EvidenceDocumentEntity, Integer>` with `List<EvidenceDocumentEntity> findByCaseId(String)`; `TaskRepository` with `Optional<TaskEntity> findByCaseIdAndTaskType(String, String)`; `AuditEntryRepository extends JpaRepository<AuditEntryEntity, Integer>` — all consumed by `CaseSystemTools` in Task 3. (`docId`/`entryId` are `Integer`, not `Long` — Postgres `SERIAL` is a 4-byte `INTEGER`, confirmed by an empirical Hibernate `ddl-auto=validate` failure against a real Postgres instance during Task 2's review; `Long`/`BIGINT` would only be correct for `BIGSERIAL`.) `TransactionEntity` has no repository this session (not used by any of the five tools; exists so Hibernate's `ddl-auto=validate` can validate the full schema, and so it's available for later sessions).
 
 - [ ] **Step 1: Create the five entities**
 
@@ -604,7 +604,7 @@ public class EvidenceDocumentEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "doc_id")
-    private Long docId;
+    private Integer docId;
 
     @Column(name = "case_id")
     private String caseId;
@@ -618,11 +618,11 @@ public class EvidenceDocumentEntity {
     @Column(name = "uploaded_at")
     private OffsetDateTime uploadedAt;
 
-    public Long getDocId() {
+    public Integer getDocId() {
         return docId;
     }
 
-    public void setDocId(Long docId) {
+    public void setDocId(Integer docId) {
         this.docId = docId;
     }
 
@@ -767,7 +767,7 @@ public class AuditEntryEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "entry_id")
-    private Long entryId;
+    private Integer entryId;
 
     @Column(name = "case_id")
     private String caseId;
@@ -781,11 +781,11 @@ public class AuditEntryEntity {
     @Column(name = "performed_at")
     private OffsetDateTime performedAt;
 
-    public Long getEntryId() {
+    public Integer getEntryId() {
         return entryId;
     }
 
-    public void setEntryId(Long entryId) {
+    public void setEntryId(Integer entryId) {
         this.entryId = entryId;
     }
 
@@ -845,7 +845,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
 
-public interface EvidenceDocumentRepository extends JpaRepository<EvidenceDocumentEntity, Long> {
+public interface EvidenceDocumentRepository extends JpaRepository<EvidenceDocumentEntity, Integer> {
 
     List<EvidenceDocumentEntity> findByCaseId(String caseId);
 }
@@ -873,7 +873,7 @@ package com.workbench.mcp.repository;
 import com.workbench.mcp.entity.AuditEntryEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface AuditEntryRepository extends JpaRepository<AuditEntryEntity, Long> {
+public interface AuditEntryRepository extends JpaRepository<AuditEntryEntity, Integer> {
 }
 ```
 
@@ -1217,8 +1217,8 @@ class CaseSystemMcpToolsTest {
         Map<String, Object> result = caseSystemTools.createAuditEntry(
                 "D-10291", "EVIDENCE_REQUEST_TASK_CREATED", "ORCHESTRATOR");
 
-        assertInstanceOf(Long.class, result.get("entryId"));
-        assertTrue((Long) result.get("entryId") > 0);
+        assertInstanceOf(Integer.class, result.get("entryId"));
+        assertTrue((Integer) result.get("entryId") > 0);
         assertNotNull(result.get("createdAt"));
     }
 }

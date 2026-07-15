@@ -16,7 +16,7 @@ public class AuditEntryEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "entry_id")
-    private Long entryId;
+    private Integer entryId;
 
     @Column(name = "case_id")
     private String caseId;
@@ -30,11 +30,11 @@ public class AuditEntryEntity {
     @Column(name = "performed_at")
     private OffsetDateTime performedAt;
 
-    public Long getEntryId() {
+    public Integer getEntryId() {
         return entryId;
     }
 
-    public void setEntryId(Long entryId) {
+    public void setEntryId(Integer entryId) {
         this.entryId = entryId;
     }
 
