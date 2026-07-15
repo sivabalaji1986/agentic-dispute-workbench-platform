@@ -418,28 +418,40 @@ Each message: `{version:"v0.9", <key>: {...}}`.
 Check transaction, merchant response, case status and available evidence for dispute case {caseId}, dispute type {disputeType}.
 ```
 
-**Response payload (structured text the orchestrator parses):**
+**Response payload (single JSON text response; see §10's `AgentResponse` wrapper —
+the A2A Java SDK has no built-in way to attach both a structured result AND a list
+of progress lines to one response, so `result` and `progressLines` below are both
+fields of one wrapper object, not two separate payloads):**
 ```json
 {
-  "caseId": "D-10291",
-  "transactionFound": true,
-  "transactionAmount": "SGD 250",
-  "merchantResponse": "available",
-  "merchantPosition": "Item was delivered",
-  "availableDocuments": ["TRANSACTION_RECORD", "MERCHANT_RESPONSE"],
-  "caseStatus": "OPEN"
+  "result": {
+    "caseId": "D-10291",
+    "transactionFound": true,
+    "transactionAmount": "SGD 250",
+    "merchantResponse": "available",
+    "merchantPosition": "Item was delivered",
+    "availableDocuments": [
+      {"label": "Transaction record", "present": true},
+      {"label": "Merchant response", "present": true}
+    ],
+    "caseStatus": "OPEN"
+  },
+  "progressLines": [
+    "Checking transaction status...",
+    "Transaction found for SGD 250",
+    "Merchant response available",
+    "Case file contains transaction record",
+    "Case file contains merchant response",
+    "No additional customer documents found in case file"
+  ]
 }
 ```
 
-Progress lines emitted during execution (streamed back to orchestrator for forwarding):
-```
-Checking transaction status...
-Transaction found for SGD 250
-Merchant response available
-Case file contains transaction record
-Case file contains merchant response
-No additional customer documents found in case file
-```
+`availableDocuments` is a list of `{label, present}` objects with human-readable
+labels (e.g. `"Transaction record"`), never raw `docType` codes like
+`"TRANSACTION_RECORD"` — see §10's `EvidenceItem` and `DocumentTypes.humanReadable`
+in `workbench-common`. Locked in by `contract-tests`'
+`CaseReviewResultContractTest`.
 
 ### 8.3 Policy Agent — request / response
 
@@ -513,10 +525,16 @@ Package: `com.workbench.common`. No Spring annotations. Records preferred.
 ```java
 // A2A request/response
 record CaseReviewRequest(String caseId, String disputeType) {}
+record EvidenceItem(String label, boolean present) {}
 record CaseReviewResult(
     String caseId, boolean transactionFound, String transactionAmount,
     String merchantResponse, String merchantPosition,
-    List<String> availableDocuments, String caseStatus) {}
+    List<EvidenceItem> availableDocuments, String caseStatus) {}
+
+// case-review-agent's single-response wrapper (A2A's Message carries one text
+// payload; this attaches both the structured result and progress lines to it).
+// policy-agent and orchestrator-agent must use this identical pattern.
+record AgentResponse(CaseReviewResult result, List<String> progressLines) {}
 
 record PolicyRequest(String disputeType) {}
 record PolicyResult(
