@@ -36,8 +36,8 @@ agentic-dispute-workbench-platform/
 | JDK | GraalVM / Eclipse Temurin 25 | 25 |
 | Spring Boot | `spring-boot-starter-parent` | 4.0.x (latest GA) |
 | Spring AI | `spring-ai-bom` | 2.0.0 |
-| A2A Java SDK | `io.a2a:a2a-core`, `a2a-client`, `a2a-server` | latest GA from `a2aproject/a2a-java` |
-| spring-ai-a2a | `org.springaicommunity:spring-ai-a2a-server-autoconfigure` | latest compatible with Spring AI 2.0 |
+| A2A Java SDK | `io.github.a2asdk:a2a-java-sdk-spec`, `a2a-java-sdk-server-common` (groupId corrected — see §2 note below; consumed transitively via spring-ai-a2a) | 0.3.3.Final |
+| spring-ai-a2a | `org.springaicommunity:spring-ai-a2a-server-autoconfigure` | 0.3.0 (verified latest on Maven Central 2026-07-15) |
 | AG-UI core types | `com.ag-ui:core` | 0.0.1 (types only — see §6) |
 | Jackson | `tools.jackson.core` / `tools.jackson.databind` | 3.x (Boot 4 default — see package note below) |
 | PostgreSQL driver | `postgresql` | Boot 4 managed |
@@ -63,6 +63,35 @@ from `com.fasterxml.jackson.annotation.*` even in a pure Jackson-3/Boot-4
 codebase. This is the one permitted exception to the "never
 `com.fasterxml.jackson.*`" rule; it applies only to the `annotation`
 subpackage, never to `.core` or `.databind`.
+
+**Second correction (verified against Maven Central 2026-07-15): the A2A Java
+SDK's real groupId is `io.github.a2asdk`, not `io.a2a`** as originally assumed
+here. There is no `io.a2a:a2a-core`/`a2a-client`/`a2a-server` on Maven
+Central. The actual artifacts are `io.github.a2asdk:a2a-java-sdk-spec` and
+`a2a-java-sdk-server-common` (version 0.3.3.Final), consumed transitively via
+`org.springaicommunity:spring-ai-a2a-server-autoconfigure:0.3.0` — modules
+using A2A do not depend on the a2asdk artifacts directly.
+
+**Jackson exception for A2A-using modules (verified 2026-07-15):** the A2A
+Java SDK (`a2a-java-sdk-spec`, `a2a-java-sdk-server-common`) depends on
+`com.fasterxml.jackson.core:jackson-databind` 2.x at compile scope for its
+own internal protocol message serialization — this is a genuine, unavoidable
+transitive dependency of the third-party A2A ecosystem, not something that
+can be excluded without breaking A2A functionality (no Jackson-3-based A2A
+SDK exists). Any module that depends on `spring-ai-a2a-server-autoconfigure`
+(`case-review-agent`, `policy-agent`, and any other A2A server module) MUST
+override/disable the parent POM's `enforce-no-jackson2-core-databind`
+enforcer execution locally (re-declare the same execution `id` with
+`<phase>none</phase>` in that module's own `pom.xml`), with a prominent
+comment explaining why. This exception is scoped ONLY to the transitive
+presence of Jackson 2 on the classpath via the A2A SDK — it does NOT permit
+any module's own source code to import `com.fasterxml.jackson.core.*` or
+`com.fasterxml.jackson.databind.*` directly. Every module's own code
+(DTOs, tool clients, response builders) still exclusively uses
+`tools.jackson.core.*` / `tools.jackson.databind.*` for its own
+serialization, per the rule above — Jackson 2 exists on these modules'
+classpaths only as an internal implementation detail of the A2A library,
+never touched by our own imports.
 
 **Build:** Maven multi-module. Parent POM manages all versions via BOMs.
 Child modules inherit; no version declared in child POMs except for
