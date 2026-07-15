@@ -1,3 +1,7 @@
+// Verified: agui-support has no Boot autoconfiguration dependency (spring-boot-autoconfigure
+// is present only transitively via spring-boot-starter-webflux -> spring-boot-starter; not
+// declared directly in this module's pom.xml, and no @SpringBootApplication /
+// @EnableAutoConfiguration / @ComponentScan exists anywhere in agui-support/src).
 package com.workbench.agui.emitter;
 
 import com.workbench.agui.events.AguiEvents;
