@@ -13,6 +13,10 @@ public record PendingApproval(
         List<String> missingItems,
         boolean executed) {
 
+    public PendingApproval {
+        missingItems = missingItems == null ? List.of() : List.copyOf(missingItems);
+    }
+
     public PendingApproval withExecuted(boolean executed) {
         return new PendingApproval(threadId, surfaceId, caseId, taskType, missingItems, executed);
     }
