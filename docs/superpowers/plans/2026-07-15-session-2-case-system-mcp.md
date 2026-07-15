@@ -107,7 +107,13 @@ CREATE TABLE workbench.tasks (
     task_type      VARCHAR(50) NOT NULL,
     missing_items  TEXT[],
     assigned_queue VARCHAR(50),
-    created_at     TIMESTAMPTZ DEFAULT NOW()
+    created_at     TIMESTAMPTZ DEFAULT NOW(),
+    -- Backstops create_task's application-level idempotency check (find-then-insert)
+    -- against true concurrent calls for the same case + task type. ddl-auto=validate
+    -- does not check unique constraints, so this is additive and safe. Added during
+    -- final whole-branch review (see progress ledger) — this session authors the
+    -- canonical schema Session 6 freezes for docker-compose, so it belongs here.
+    CONSTRAINT uq_tasks_case_id_task_type UNIQUE (case_id, task_type)
 );
 
 -- audit_entries
