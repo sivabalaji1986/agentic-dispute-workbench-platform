@@ -8,7 +8,122 @@
     <artifactId>agentic-dispute-workbench-platform</artifactId>
     <version>1.0.0-SNAPSHOT</version>
   </parent>
+
   <artifactId>case-system-mcp</artifactId>
-  <packaging>pom</packaging>
-  <!-- Stub for Session 2 (PLATFORM_CONTRACT.md §15): Spring Boot app, MCP server over Postgres. -->
+  <packaging>jar</packaging>
+
+  <!--
+    Spring AI MCP server artifact verified live against Maven Central and the
+    Spring AI 2.0.0 reference docs on 2026-07-15 (per session-2-prompt.md's
+    instruction not to assume the artifact ID from memory):
+
+      org.springframework.ai:spring-ai-starter-mcp-server-webmvc:2.0.0
+
+    This is the WebMVC (servlet) Streamable HTTP transport starter — confirmed
+    via its auto-configuration class McpServerStreamableHttpWebMvcAutoConfiguration,
+    which registers WebMvcStreamableServerTransportProvider. No WebFlux.
+
+    Tools are registered by exposing a `ToolCallbackProvider` bean built with
+    MethodToolCallbackProvider.builder().toolObjects(...) (see
+    CaseSystemMcpApplication) — Spring AI's own ToolCallbackConverterAutoConfiguration
+    + McpServerAutoConfiguration pick this up automatically. No manual
+    McpSyncServerExchange bean is needed or correct for Spring AI 2.0.
+
+    Testcontainers is BOM-managed at 2.0.5, which renamed its module artifacts:
+    org.testcontainers:testcontainers-postgresql (not "postgresql") and
+    org.testcontainers:testcontainers-junit-jupiter (not "junit-jupiter").
+  -->
+
+  <dependencies>
+    <dependency>
+      <groupId>com.workbench</groupId>
+      <artifactId>workbench-common</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.ai</groupId>
+      <artifactId>spring-ai-starter-mcp-server-webmvc</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-jpa</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-testcontainers</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers-postgresql</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers-junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <testResources>
+      <testResource>
+        <directory>${project.basedir}/src/test/resources</directory>
+      </testResource>
+      <testResource>
+        <!-- infra/seed is the single schema source of truth (Session 6 reuses
+             these same files for docker-compose) — Maven copies them onto the
+             test classpath at build time rather than duplicating them here. -->
+        <directory>${project.basedir}/../infra/seed</directory>
+        <includes>
+          <include>schema.sql</include>
+          <include>seed-data.sql</include>
+        </includes>
+      </testResource>
+    </testResources>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <goals>
+              <goal>repackage</goal>
+            </goals>
+            <configuration>
+              <!-- Without a classifier, repackage replaces this module's published
+                   jar with the fat executable jar, whose dependencies are nested
+                   under BOOT-INF/lib/ and are not resolvable as normal Maven
+                   transitive dependencies. contract-tests (Task 5) depends on this
+                   module as a library to reuse CaseSystemTools directly, so the
+                   thin jar must remain the default artifact. -->
+              <classifier>exec</classifier>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
 </project>
