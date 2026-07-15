@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.workbench</groupId>
+  <artifactId>agentic-dispute-workbench-platform</artifactId>
+  <version>1.0.0-SNAPSHOT</version>
+  <packaging>pom</packaging>
+
+  <!--
+    ============================================================
+    JACKSON 3 IMPORT RULE — READ BEFORE ADDING ANY JACKSON IMPORT
+    ============================================================
+    Spring Boot 4 ships Jackson 3. ObjectMapper and all core
+    streaming/databind types MUST be imported from `tools.jackson.core.*`
+    or `tools.jackson.databind.*`. NEVER `com.fasterxml.jackson.core`
+    or `com.fasterxml.jackson.databind` — those are the Jackson 2
+    classes and are binary-incompatible with Jackson 3's databind.
+
+    EXCEPTION — annotations only: `@JsonProperty`, `@JsonInclude`, etc.
+    are imported from `com.fasterxml.jackson.annotation.*`. Jackson 3
+    never renamed the annotations module (verified against the
+    published jackson-databind:3.1.4 POM on Maven Central, which
+    depends on com.fasterxml.jackson.core:jackson-annotations
+    directly); `tools.jackson.core:jackson-annotations` does not
+    exist. This is the ONLY permitted com.fasterxml.jackson import.
+
+    The maven-enforcer-plugin execution below fails the build if
+    com.fasterxml.jackson.core:jackson-databind or
+    com.fasterxml.jackson.core:jackson-core ever appear on the
+    classpath (real Jackson 2, not the shared annotations module).
+    ============================================================
+  -->
+
+  <properties>
+    <java.version>25</java.version>
+    <maven.compiler.source>25</maven.compiler.source>
+    <maven.compiler.target>25</maven.compiler.target>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <spring-boot.version>4.0.7</spring-boot.version>
+    <spring-ai.version>2.0.0</spring-ai.version>
+  </properties>
+
+  <modules>
+    <module>workbench-common</module>
+    <module>agui-support</module>
+    <module>case-system-mcp</module>
+    <module>case-review-agent</module>
+    <module>policy-agent</module>
+    <module>orchestrator-agent</module>
+  </modules>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-dependencies</artifactId>
+        <version>${spring-boot.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.springframework.ai</groupId>
+        <artifactId>spring-ai-bom</artifactId>
+        <version>${spring-ai.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <build>
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <version>3.15.0</version>
+          <configuration>
+            <release>25</release>
+          </configuration>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <version>3.5.6</version>
+        </plugin>
+        <plugin>
+          <groupId>org.springframework.boot</groupId>
+          <artifactId>spring-boot-maven-plugin</artifactId>
+          <version>${spring-boot.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-enforcer-plugin</artifactId>
+          <version>3.6.3</version>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>enforce-no-jackson2-core-databind</id>
+            <phase>validate</phase>
+            <goals>
+              <goal>enforce</goal>
+            </goals>
+            <configuration>
+              <rules>
+                <bannedDependencies>
+                  <excludes>
+                    <exclude>com.fasterxml.jackson.core:jackson-databind</exclude>
+                    <exclude>com.fasterxml.jackson.core:jackson-core</exclude>
+                  </excludes>
+                  <message>
+                    Jackson 2 core/databind (com.fasterxml.jackson.core:jackson-databind or
+                    jackson-core) detected on the classpath. Spring Boot 4 uses Jackson 3
+                    (tools.jackson.core / tools.jackson.databind) for all core/databind
+                    usage. Exclude the transitive Jackson 2 dependency. (Note:
+                    com.fasterxml.jackson.core:jackson-annotations is exempt — Jackson 3
+                    never renamed the annotations module.)
+                  </message>
+                </bannedDependencies>
+              </rules>
+              <fail>true</fail>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>
