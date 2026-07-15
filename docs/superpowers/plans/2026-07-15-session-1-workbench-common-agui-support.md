@@ -1222,6 +1222,13 @@ class AguiEmitterTest {
                     }
                     return !"RUN_FINISHED".equals(node.get("type").asString());
                 })
+                // thenConsumeWhile stops at the first element that fails the predicate
+                // WITHOUT consuming it — the RUN_FINISHED signal is still pending here,
+                // so it must be asserted explicitly before expectComplete().
+                .assertNext(sse -> {
+                    JsonNode node = objectMapper.readTree(sse.data());
+                    assertEquals("RUN_FINISHED", node.get("type").asString());
+                })
                 .expectComplete()
                 .verify(Duration.ofSeconds(2));
 
@@ -1329,28 +1336,24 @@ public class AguiEmitter {
     }
 
     public void emit(Object event) {
-        String json;
-        try {
-            json = objectMapper.writeValueAsString(event);
-        } catch (RuntimeException e) {
-            json = objectMapper.writeValueAsString(
-                    new AguiEvents.RunErrorEvent(null, null, "Failed to serialize event: " + e.getMessage()));
-        }
+        String json = serialize(event);
         synchronized (emitLock) {
             sink.tryEmitNext(ServerSentEvent.builder(json).build());
         }
     }
 
     public void complete(String threadId, String runId) {
-        emit(new AguiEvents.RunFinishedEvent(threadId, runId));
+        String json = serialize(new AguiEvents.RunFinishedEvent(threadId, runId));
         synchronized (emitLock) {
+            sink.tryEmitNext(ServerSentEvent.builder(json).build());
             sink.tryEmitComplete();
         }
     }
 
     public void error(String threadId, String runId, String message) {
-        emit(new AguiEvents.RunErrorEvent(threadId, runId, message));
+        String json = serialize(new AguiEvents.RunErrorEvent(threadId, runId, message));
         synchronized (emitLock) {
+            sink.tryEmitNext(ServerSentEvent.builder(json).build());
             sink.tryEmitComplete();
         }
     }
@@ -1358,8 +1361,19 @@ public class AguiEmitter {
     public Flux<ServerSentEvent<String>> flux() {
         return sink.asFlux();
     }
+
+    private String serialize(Object event) {
+        try {
+            return objectMapper.writeValueAsString(event);
+        } catch (RuntimeException e) {
+            return objectMapper.writeValueAsString(
+                    new AguiEvents.RunErrorEvent(null, null, "Failed to serialize event: " + e.getMessage()));
+        }
+    }
 }
 ```
+
+**Superseded during execution (commit `1dac7f9`):** the version above — where `complete()`/`error()` called `emit()` (which acquires and releases `emitLock` internally) and then opened a *second, separate* `synchronized` block for `tryEmitComplete()` — has a race: the lock is released between the two blocks, so a concurrently-running `emit()` call can land after the terminal event, or lose its `tryEmitNext` to `FAIL_TERMINATED` silently. The version shown above has already been corrected to close that race by factoring serialization into `serialize()` and doing `tryEmitNext` + `tryEmitComplete` inside one shared `synchronized` block. If replaying this plan from scratch, implement the corrected version directly.
 
 - [ ] **Step 4: Run the test to verify it passes**
 
