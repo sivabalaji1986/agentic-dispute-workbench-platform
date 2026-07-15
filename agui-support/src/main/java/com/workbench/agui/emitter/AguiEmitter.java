@@ -18,29 +18,34 @@ public class AguiEmitter {
     }
 
     public void emit(Object event) {
-        String json;
-        try {
-            json = objectMapper.writeValueAsString(event);
-        } catch (RuntimeException e) {
-            json = objectMapper.writeValueAsString(
-                    new AguiEvents.RunErrorEvent(null, null, "Failed to serialize event: " + e.getMessage()));
-        }
+        String json = serialize(event);
         synchronized (emitLock) {
             sink.tryEmitNext(ServerSentEvent.builder(json).build());
         }
     }
 
     public void complete(String threadId, String runId) {
-        emit(new AguiEvents.RunFinishedEvent(threadId, runId));
+        String json = serialize(new AguiEvents.RunFinishedEvent(threadId, runId));
         synchronized (emitLock) {
+            sink.tryEmitNext(ServerSentEvent.builder(json).build());
             sink.tryEmitComplete();
         }
     }
 
     public void error(String threadId, String runId, String message) {
-        emit(new AguiEvents.RunErrorEvent(threadId, runId, message));
+        String json = serialize(new AguiEvents.RunErrorEvent(threadId, runId, message));
         synchronized (emitLock) {
+            sink.tryEmitNext(ServerSentEvent.builder(json).build());
             sink.tryEmitComplete();
+        }
+    }
+
+    private String serialize(Object event) {
+        try {
+            return objectMapper.writeValueAsString(event);
+        } catch (RuntimeException e) {
+            return objectMapper.writeValueAsString(
+                    new AguiEvents.RunErrorEvent(null, null, "Failed to serialize event: " + e.getMessage()));
         }
     }
 
