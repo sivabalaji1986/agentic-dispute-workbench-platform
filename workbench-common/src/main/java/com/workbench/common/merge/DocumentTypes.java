@@ -4,9 +4,10 @@ import java.util.Map;
 
 /**
  * Document-type-code to human-readable name mapping (PLATFORM_CONTRACT.md §10/§B3).
- * Package-private: only {@link EvidenceReadiness} needs it this session.
+ * Public: consumed cross-module by case-review-agent (Session 3) to build
+ * human-readable EvidenceItem labels, in addition to EvidenceReadiness in this module.
  */
-final class DocumentTypes {
+public final class DocumentTypes {
 
     private static final Map<String, String> HUMAN_READABLE_NAMES = Map.of(
             "TRANSACTION_RECORD", "Transaction record",
@@ -17,7 +18,7 @@ final class DocumentTypes {
     private DocumentTypes() {
     }
 
-    static String humanReadable(String docType) {
+    public static String humanReadable(String docType) {
         return HUMAN_READABLE_NAMES.getOrDefault(docType, docType);
     }
 }

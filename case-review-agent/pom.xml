@@ -8,7 +8,87 @@
     <artifactId>agentic-dispute-workbench-platform</artifactId>
     <version>1.0.0-SNAPSHOT</version>
   </parent>
+
   <artifactId>case-review-agent</artifactId>
-  <packaging>pom</packaging>
-  <!-- Stub for Session 3 (PLATFORM_CONTRACT.md §15): Spring Boot app, A2A server, MCP client reads. -->
+  <packaging>jar</packaging>
+
+  <!--
+    Verified live against Maven Central and the spring-ai-community/spring-ai-a2a
+    GitHub repo on 2026-07-15 (per session-3-prompt.md's instruction not to assume
+    artifact IDs or APIs from memory):
+
+      org.springaicommunity:spring-ai-a2a-server-autoconfigure:0.3.0
+
+    The A2A Java SDK's real groupId is io.github.a2asdk (not io.a2a, which does not
+    exist on Maven Central) — consumed transitively, never declared directly here.
+
+    JACKSON 2 EXCEPTION FOR THIS MODULE: the A2A SDK (a2a-java-sdk-spec,
+    a2a-java-sdk-server-common, both io.github.a2asdk:*:0.3.3.Final) depends on
+    com.fasterxml.jackson.core:jackson-databind (Jackson 2) at compile scope for
+    its OWN internal protocol message serialization — a genuine, unavoidable
+    transitive dependency of the third-party A2A ecosystem (verified against the
+    real published POMs; no Jackson-3-based A2A SDK exists). This module's own
+    code still exclusively uses tools.jackson.core.*/tools.jackson.databind.* and
+    com.fasterxml.jackson.annotation.* like every other module — Jackson 2 is
+    never imported by our own source, only present transitively via the A2A
+    library. The parent's enforce-no-jackson2-core-databind execution is
+    disabled below (re-declared with phase=none) for this module only. See
+    PLATFORM_CONTRACT.md §2 for the full documented exception.
+
+    No WebFlux, no JPA — this agent reads via MCP (spring-ai-starter-mcp-client,
+    httpclient/sync transport, not the -webflux variant), not direct DB access.
+  -->
+
+  <dependencies>
+    <dependency>
+      <groupId>com.workbench</groupId>
+      <artifactId>workbench-common</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.springaicommunity</groupId>
+      <artifactId>spring-ai-a2a-server-autoconfigure</artifactId>
+      <version>0.3.0</version>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.ai</groupId>
+      <artifactId>spring-ai-starter-mcp-client</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.ai</groupId>
+      <artifactId>spring-ai-starter-model-ollama</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>enforce-no-jackson2-core-databind</id>
+            <phase>none</phase>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
 </project>
