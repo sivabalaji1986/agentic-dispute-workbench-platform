@@ -1,6 +1,7 @@
 package com.workbench.caseagent;
 
 import com.workbench.caseagent.mcp.CaseMcpClient;
+import com.workbench.caseagent.mcp.CaseNotFoundException;
 import com.workbench.common.a2a.AgentResponse;
 import com.workbench.common.a2a.CaseReviewResult;
 import com.workbench.common.agui.EvidenceItem;
@@ -28,6 +29,8 @@ public class CaseReviewAgentExecutor {
     private static final Set<String> CUSTOMER_DOC_TYPES =
             Set.of("CUSTOMER_DECLARATION", "DELIVERY_DISPUTE_PROOF");
 
+    private static final String MERCHANT_RESPONSE_DOC_TYPE = "MERCHANT_RESPONSE";
+
     private final CaseMcpClient caseMcpClient;
     private final ChatClient chatClient;
     private final ObjectMapper objectMapper = JsonMapper.builder().build();
@@ -40,7 +43,7 @@ public class CaseReviewAgentExecutor {
     public String execute(String messageText) {
         Matcher matcher = INPUT_PATTERN.matcher(messageText == null ? "" : messageText);
         if (!matcher.find()) {
-            return errorResponse("UNKNOWN", "Unable to parse dispute case request");
+            return errorResult("UNKNOWN", "Unable to parse dispute case request", false);
         }
         String caseId = matcher.group(1);
 
@@ -50,23 +53,28 @@ public class CaseReviewAgentExecutor {
         Map<String, Object> caseData;
         try {
             caseData = caseMcpClient.getCase(caseId);
+        } catch (CaseNotFoundException e) {
+            return errorResult(caseId, "Case not found: " + caseId, false);
         } catch (RuntimeException e) {
-            return errorResponse(caseId, "Case not found: " + caseId);
+            return errorResult(caseId, "Unable to retrieve case data: " + e.getMessage(), true);
         }
 
         String transactionAmount = formatAmount(caseData);
         progressLines.add("Transaction found for " + transactionAmount);
-        progressLines.add("Merchant response available");
 
         Map<String, Object> documentsResponse;
         try {
             documentsResponse = caseMcpClient.listCaseDocuments(caseId);
         } catch (RuntimeException e) {
-            return errorResponse(caseId, "Unable to retrieve case documents: " + caseId);
+            return errorResult(caseId, "Unable to retrieve case documents: " + e.getMessage(), true);
         }
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> documents =
                 (List<Map<String, Object>>) documentsResponse.getOrDefault("documents", List.of());
+
+        boolean merchantResponded = documents.stream().anyMatch(doc ->
+                MERCHANT_RESPONSE_DOC_TYPE.equals(doc.get("docType")) && Boolean.TRUE.equals(doc.get("present")));
+        progressLines.add(merchantResponded ? "Merchant response available" : "No merchant response on file");
 
         List<EvidenceItem> availableDocuments = new ArrayList<>();
         boolean hasCustomerDocs = false;
@@ -85,32 +93,34 @@ public class CaseReviewAgentExecutor {
             progressLines.add("No additional customer documents found in case file");
         }
 
-        LlmSummary summary = summarizeMerchantResponse(caseData);
+        String merchantResponseStatus = merchantResponded ? "available" : "not available";
+        String merchantPosition = merchantResponded
+                ? summarizeMerchantPosition(caseData)
+                : "No merchant response on file";
 
         CaseReviewResult result = new CaseReviewResult(
                 caseId,
                 true,
                 transactionAmount,
-                summary.merchantResponse(),
-                summary.merchantPosition(),
+                merchantResponseStatus,
+                merchantPosition,
                 availableDocuments,
                 (String) caseData.get("caseStatus"));
 
         return serialize(new AgentResponse<>(result, progressLines, false));
     }
 
-    private LlmSummary summarizeMerchantResponse(Map<String, Object> caseData) {
+    private String summarizeMerchantPosition(Map<String, Object> caseData) {
         String caseJson = objectMapper.writeValueAsString(caseData);
         String prompt = "Given this case data: " + caseJson + "\n"
-                + "Summarise: 1) Has the merchant responded? (yes/no) 2) What is the merchant's "
-                + "position in one sentence?\n"
-                + "Respond only with JSON: {\"merchantResponse\": \"...\", \"merchantPosition\": \"...\"}";
+                + "Summarise the merchant's position in one sentence.\n"
+                + "Respond only with JSON: {\"merchantPosition\": \"...\"}";
         try {
             String content = chatClient.prompt().user(prompt).call().content();
             JsonNode node = objectMapper.readTree(content);
-            return new LlmSummary(node.get("merchantResponse").asString(), node.get("merchantPosition").asString());
+            return node.get("merchantPosition").asString();
         } catch (RuntimeException e) {
-            return new LlmSummary("unknown", "Unable to determine");
+            return "Unable to determine";
         }
     }
 
@@ -125,16 +135,13 @@ public class CaseReviewAgentExecutor {
         return (currency + " " + amountObj).trim();
     }
 
-    private String errorResponse(String caseId, String message) {
-        CaseReviewResult errorResult = new CaseReviewResult(
-                caseId, false, null, "unknown", message, List.of(), "UNKNOWN");
-        return serialize(new AgentResponse<>(errorResult, List.of(message), false));
+    private String errorResult(String caseId, String message, boolean retryable) {
+        CaseReviewResult result = new CaseReviewResult(
+                caseId, false, null, "unknown", null, List.of(), "UNKNOWN", message);
+        return serialize(new AgentResponse<>(result, List.of(message), retryable));
     }
 
     private String serialize(AgentResponse<CaseReviewResult> response) {
         return objectMapper.writeValueAsString(response);
-    }
-
-    private record LlmSummary(String merchantResponse, String merchantPosition) {
     }
 }

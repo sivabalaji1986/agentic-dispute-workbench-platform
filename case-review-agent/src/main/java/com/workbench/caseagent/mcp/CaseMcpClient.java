@@ -10,6 +10,8 @@ import java.util.Map;
 @Service
 public class CaseMcpClient {
 
+    private static final String CASE_NOT_FOUND_PREFIX = "Case not found:";
+
     private final McpSyncClient client;
 
     public CaseMcpClient(List<McpSyncClient> syncClients) {
@@ -20,26 +22,51 @@ public class CaseMcpClient {
     }
 
     public Map<String, Object> getCase(String caseId) {
-        return callTool("get_case", Map.of("caseId", caseId));
+        McpSchema.CallToolResult result = call("get_case", Map.of("caseId", caseId));
+        if (Boolean.TRUE.equals(result.isError())) {
+            String errorText = extractErrorText(result);
+            if (errorText.startsWith(CASE_NOT_FOUND_PREFIX)) {
+                throw new CaseNotFoundException(errorText);
+            }
+            throw new IllegalStateException("MCP tool call failed: get_case: " + errorText);
+        }
+        return extractStructuredContent(result, "get_case");
     }
 
     public Map<String, Object> listCaseDocuments(String caseId) {
         return callTool("list_case_documents", Map.of("caseId", caseId));
     }
 
-    @SuppressWarnings("unchecked")
     private Map<String, Object> callTool(String toolName, Map<String, Object> arguments) {
+        McpSchema.CallToolResult result = call(toolName, arguments);
+        if (Boolean.TRUE.equals(result.isError())) {
+            throw new IllegalStateException("MCP tool call failed: " + toolName + ": " + extractErrorText(result));
+        }
+        return extractStructuredContent(result, toolName);
+    }
+
+    private McpSchema.CallToolResult call(String toolName, Map<String, Object> arguments) {
         McpSchema.CallToolRequest request = McpSchema.CallToolRequest.builder(toolName)
                 .arguments(arguments)
                 .build();
-        McpSchema.CallToolResult result = client.callTool(request);
-        if (Boolean.TRUE.equals(result.isError())) {
-            throw new IllegalStateException("MCP tool call failed: " + toolName);
-        }
+        return client.callTool(request);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> extractStructuredContent(McpSchema.CallToolResult result, String toolName) {
         Object structured = result.structuredContent();
         if (structured instanceof Map<?, ?> map) {
             return (Map<String, Object>) map;
         }
         throw new IllegalStateException("MCP tool " + toolName + " returned no structured content");
+    }
+
+    private static String extractErrorText(McpSchema.CallToolResult result) {
+        return result.content().stream()
+                .filter(McpSchema.TextContent.class::isInstance)
+                .map(McpSchema.TextContent.class::cast)
+                .map(McpSchema.TextContent::text)
+                .findFirst()
+                .orElse("Unknown MCP error");
     }
 }

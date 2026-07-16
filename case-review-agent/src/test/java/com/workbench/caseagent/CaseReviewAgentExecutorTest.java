@@ -1,6 +1,7 @@
 package com.workbench.caseagent;
 
 import com.workbench.caseagent.mcp.CaseMcpClient;
+import com.workbench.caseagent.mcp.CaseNotFoundException;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
 import tools.jackson.databind.JsonNode;
@@ -27,6 +28,10 @@ class CaseReviewAgentExecutorTest {
     private final ObjectMapper objectMapper = JsonMapper.builder().build();
 
     private CaseMcpClient mockMcpClient() {
+        return mockMcpClient(true);
+    }
+
+    private CaseMcpClient mockMcpClient(boolean merchantResponsePresent) {
         CaseMcpClient client = mock(CaseMcpClient.class);
         when(client.getCase("D-10291")).thenReturn(Map.of(
                 "caseId", "D-10291",
@@ -36,9 +41,12 @@ class CaseReviewAgentExecutorTest {
                 "caseStatus", "OPEN",
                 "amount", 250.00,
                 "currency", "SGD"));
-        when(client.listCaseDocuments("D-10291")).thenReturn(Map.of("documents", List.of(
-                Map.of("docType", "TRANSACTION_RECORD", "present", true),
-                Map.of("docType", "MERCHANT_RESPONSE", "present", true))));
+        List<Map<String, Object>> documents = merchantResponsePresent
+                ? List.of(
+                        Map.of("docType", "TRANSACTION_RECORD", "present", true),
+                        Map.of("docType", "MERCHANT_RESPONSE", "present", true))
+                : List.of(Map.of("docType", "TRANSACTION_RECORD", "present", true));
+        when(client.listCaseDocuments("D-10291")).thenReturn(Map.of("documents", documents));
         return client;
     }
 
@@ -52,7 +60,7 @@ class CaseReviewAgentExecutorTest {
 
     @Test
     void execute_validCase_returnsStructuredResult() {
-        String llmJson = "{\"merchantResponse\": \"available\", \"merchantPosition\": \"Item was delivered\"}";
+        String llmJson = "{\"merchantPosition\": \"Item was delivered\"}";
         CaseReviewAgentExecutor executor = new CaseReviewAgentExecutor(mockMcpClient(), chatClientBuilderReturning(llmJson));
 
         String responseJson = executor.execute(DEMO_MESSAGE);
@@ -62,11 +70,13 @@ class CaseReviewAgentExecutorTest {
         assertTrue(result.get("transactionFound").asBoolean());
         assertEquals("SGD 250", result.get("transactionAmount").asString());
         assertEquals(2, result.get("availableDocuments").size());
+        assertEquals("available", result.get("merchantResponse").asString());
+        assertEquals("Item was delivered", result.get("merchantPosition").asString());
     }
 
     @Test
     void execute_validCase_progressLinesPresent() {
-        String llmJson = "{\"merchantResponse\": \"available\", \"merchantPosition\": \"Item was delivered\"}";
+        String llmJson = "{\"merchantPosition\": \"Item was delivered\"}";
         CaseReviewAgentExecutor executor = new CaseReviewAgentExecutor(mockMcpClient(), chatClientBuilderReturning(llmJson));
 
         String responseJson = executor.execute(DEMO_MESSAGE);
@@ -85,7 +95,7 @@ class CaseReviewAgentExecutorTest {
 
     @Test
     void execute_documentsUseHumanReadableLabels() {
-        String llmJson = "{\"merchantResponse\": \"available\", \"merchantPosition\": \"Item was delivered\"}";
+        String llmJson = "{\"merchantPosition\": \"Item was delivered\"}";
         CaseReviewAgentExecutor executor = new CaseReviewAgentExecutor(mockMcpClient(), chatClientBuilderReturning(llmJson));
 
         String responseJson = executor.execute(DEMO_MESSAGE);
@@ -101,19 +111,54 @@ class CaseReviewAgentExecutorTest {
     }
 
     @Test
-    void execute_unknownCase_returnsErrorGracefully() {
+    void execute_noMerchantResponseDocument_reflectsAbsenceNotHallucination() {
+        String llmJson = "{\"merchantPosition\": \"Item was delivered\"}";
+        CaseReviewAgentExecutor executor =
+                new CaseReviewAgentExecutor(mockMcpClient(false), chatClientBuilderReturning(llmJson));
+
+        String responseJson = executor.execute(DEMO_MESSAGE);
+        JsonNode node = objectMapper.readTree(responseJson);
+        JsonNode result = node.get("result");
+        List<String> lines = new java.util.ArrayList<>();
+        node.get("progressLines").forEach(n -> lines.add(n.asString()));
+
+        assertTrue(lines.contains("No merchant response on file"));
+        assertFalse(lines.contains("Merchant response available"));
+        assertEquals("not available", result.get("merchantResponse").asString());
+        assertEquals("No merchant response on file", result.get("merchantPosition").asString());
+    }
+
+    @Test
+    void execute_unknownCase_returnsNotFoundError() {
         CaseMcpClient client = mock(CaseMcpClient.class);
-        when(client.getCase("D-UNKNOWN")).thenThrow(new IllegalStateException("Case not found: D-UNKNOWN"));
+        when(client.getCase("D-UNKNOWN")).thenThrow(new CaseNotFoundException("Case not found: D-UNKNOWN"));
         String message = "Check transaction, merchant response, case status and available evidence "
                 + "for dispute case D-UNKNOWN, dispute type GOODS_NOT_RECEIVED.";
 
         CaseReviewAgentExecutor executor = new CaseReviewAgentExecutor(client, chatClientBuilderReturning("{}"));
 
         String responseJson = executor.execute(message);
-        JsonNode result = objectMapper.readTree(responseJson).get("result");
+        JsonNode node = objectMapper.readTree(responseJson);
+        JsonNode result = node.get("result");
 
         assertFalse(result.get("transactionFound").asBoolean());
-        assertTrue(result.get("merchantPosition").asString().contains("D-UNKNOWN"));
+        assertTrue(result.get("errorMessage").asString().contains("D-UNKNOWN"));
+        assertFalse(node.get("retryable").asBoolean());
+    }
+
+    @Test
+    void execute_mcpUnavailable_returnsRetryableError() {
+        CaseMcpClient client = mock(CaseMcpClient.class);
+        when(client.getCase("D-10291")).thenThrow(new IllegalStateException("MCP tool call failed: get_case: timeout"));
+
+        CaseReviewAgentExecutor executor = new CaseReviewAgentExecutor(client, chatClientBuilderReturning("{}"));
+
+        String responseJson = executor.execute(DEMO_MESSAGE);
+        JsonNode node = objectMapper.readTree(responseJson);
+        JsonNode result = node.get("result");
+
+        assertTrue(result.get("errorMessage").asString().contains("Unable to retrieve"));
+        assertTrue(node.get("retryable").asBoolean());
     }
 
     @Test
@@ -124,7 +169,7 @@ class CaseReviewAgentExecutorTest {
         String responseJson = executor.execute(DEMO_MESSAGE);
         JsonNode result = objectMapper.readTree(responseJson).get("result");
 
-        assertEquals("unknown", result.get("merchantResponse").asString());
+        assertEquals("available", result.get("merchantResponse").asString());
         assertEquals("Unable to determine", result.get("merchantPosition").asString());
     }
 }

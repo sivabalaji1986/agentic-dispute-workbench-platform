@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -62,5 +63,35 @@ class CaseMcpClientTest {
         assertTrue(documents.get(0).containsKey("present"));
         assertEquals("TRANSACTION_RECORD", documents.get(0).get("docType"));
         assertEquals(true, documents.get(0).get("present"));
+    }
+
+    @Test
+    void getCase_caseNotFound_throwsCaseNotFoundException() {
+        McpSyncClient mockClient = mock(McpSyncClient.class);
+        McpSchema.CallToolResult errorResult = new McpSchema.CallToolResult(
+                List.of(McpSchema.TextContent.builder("Case not found: D-99999").build()),
+                true, null, Map.of());
+        when(mockClient.callTool(any())).thenReturn(errorResult);
+
+        CaseMcpClient client = new CaseMcpClient(List.of(mockClient));
+
+        CaseNotFoundException exception =
+                assertThrows(CaseNotFoundException.class, () -> client.getCase("D-99999"));
+        assertTrue(exception.getMessage().contains("D-99999"));
+    }
+
+    @Test
+    void getCase_genericMcpError_throwsIllegalStateException() {
+        McpSyncClient mockClient = mock(McpSyncClient.class);
+        McpSchema.CallToolResult errorResult = new McpSchema.CallToolResult(
+                List.of(McpSchema.TextContent.builder("Database connection refused").build()),
+                true, null, Map.of());
+        when(mockClient.callTool(any())).thenReturn(errorResult);
+
+        CaseMcpClient client = new CaseMcpClient(List.of(mockClient));
+
+        IllegalStateException exception =
+                assertThrows(IllegalStateException.class, () -> client.getCase("D-10291"));
+        assertTrue(exception.getMessage().contains("Database connection refused"));
     }
 }
