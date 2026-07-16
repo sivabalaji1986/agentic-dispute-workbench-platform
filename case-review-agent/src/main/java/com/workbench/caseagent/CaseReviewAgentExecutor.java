@@ -1,6 +1,7 @@
 package com.workbench.caseagent;
 
 import com.workbench.caseagent.mcp.CaseMcpClient;
+import com.workbench.common.a2a.AgentResponse;
 import com.workbench.common.a2a.CaseReviewResult;
 import com.workbench.common.agui.EvidenceItem;
 import com.workbench.common.merge.DocumentTypes;
@@ -95,7 +96,7 @@ public class CaseReviewAgentExecutor {
                 availableDocuments,
                 (String) caseData.get("caseStatus"));
 
-        return serialize(new AgentResponse(result, progressLines));
+        return serialize(new AgentResponse<>(result, progressLines, false));
     }
 
     private LlmSummary summarizeMerchantResponse(Map<String, Object> caseData) {
@@ -127,10 +128,10 @@ public class CaseReviewAgentExecutor {
     private String errorResponse(String caseId, String message) {
         CaseReviewResult errorResult = new CaseReviewResult(
                 caseId, false, null, "unknown", message, List.of(), "UNKNOWN");
-        return serialize(new AgentResponse(errorResult, List.of(message)));
+        return serialize(new AgentResponse<>(errorResult, List.of(message), false));
     }
 
-    private String serialize(AgentResponse response) {
+    private String serialize(AgentResponse<CaseReviewResult> response) {
         return objectMapper.writeValueAsString(response);
     }
 
