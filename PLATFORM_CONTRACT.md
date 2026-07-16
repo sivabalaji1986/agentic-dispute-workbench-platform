@@ -418,10 +418,11 @@ Each message: `{version:"v0.9", <key>: {...}}`.
 Check transaction, merchant response, case status and available evidence for dispute case {caseId}, dispute type {disputeType}.
 ```
 
-**Response payload (single JSON text response; see §10's `AgentResponse` wrapper —
-the A2A Java SDK has no built-in way to attach both a structured result AND a list
-of progress lines to one response, so `result` and `progressLines` below are both
-fields of one wrapper object, not two separate payloads):**
+**Response payload (single JSON text response; see §10's `AgentResponse<T>`
+wrapper — the A2A Java SDK has no built-in way to attach a structured result,
+progress lines, AND a retry hint to one response, so `result`, `progressLines`,
+and `retryable` below are all fields of one wrapper object, not separate
+payloads):**
 ```json
 {
   "result": {
@@ -443,7 +444,8 @@ fields of one wrapper object, not two separate payloads):**
     "Case file contains transaction record",
     "Case file contains merchant response",
     "No additional customer documents found in case file"
-  ]
+  ],
+  "retryable": false
 }
 ```
 
@@ -452,6 +454,50 @@ labels (e.g. `"Transaction record"`), never raw `docType` codes like
 `"TRANSACTION_RECORD"` — see §10's `EvidenceItem` and `DocumentTypes.humanReadable`
 in `workbench-common`. Locked in by `contract-tests`'
 `CaseReviewResultContractTest`.
+
+`merchantResponse`/`merchantPosition` are no longer both LLM-derived:
+`merchantResponse` (`"available"` or `"not available"`) is computed directly from
+whether `list_case_documents` returns a `MERCHANT_RESPONSE` entry with
+`present: true` — a real MCP-sourced fact, not an LLM guess. The LLM is only
+called to summarise `merchantPosition` into one sentence, and only when
+`merchantResponse` is `"available"`; otherwise `merchantPosition` is set to the
+fixed string `"No merchant response on file"` and the progress line
+`"Merchant response available"` is replaced with `"No merchant response on
+file"`.
+
+`result.errorMessage` (nullable, omitted when absent) and the top-level
+`retryable` boolean distinguish two error outcomes. Case genuinely absent
+(`get_case` returns not-found) — `retryable: false`, don't retry:
+```json
+{
+  "result": {
+    "caseId": "D-99999",
+    "transactionFound": false,
+    "merchantResponse": "unknown",
+    "availableDocuments": [],
+    "caseStatus": "UNKNOWN",
+    "errorMessage": "Case not found: D-99999"
+  },
+  "progressLines": ["Case not found: D-99999"],
+  "retryable": false
+}
+```
+MCP/transport failure (server unreachable, timeout, malformed response) —
+`retryable: true`, retry may succeed:
+```json
+{
+  "result": {
+    "caseId": "D-10291",
+    "transactionFound": false,
+    "merchantResponse": "unknown",
+    "availableDocuments": [],
+    "caseStatus": "UNKNOWN",
+    "errorMessage": "Unable to retrieve case data: <underlying MCP error text>"
+  },
+  "progressLines": ["Unable to retrieve case data: <underlying MCP error text>"],
+  "retryable": true
+}
+```
 
 ### 8.3 Policy Agent — request / response
 
@@ -529,12 +575,17 @@ record EvidenceItem(String label, boolean present) {}
 record CaseReviewResult(
     String caseId, boolean transactionFound, String transactionAmount,
     String merchantResponse, String merchantPosition,
-    List<EvidenceItem> availableDocuments, String caseStatus) {}
+    List<EvidenceItem> availableDocuments, String caseStatus,
+    String errorMessage) {}                      // nullable; null/omitted on success
 
-// case-review-agent's single-response wrapper (A2A's Message carries one text
-// payload; this attaches both the structured result and progress lines to it).
-// policy-agent and orchestrator-agent must use this identical pattern.
-record AgentResponse(CaseReviewResult result, List<String> progressLines) {}
+// Generic single-response wrapper (A2A's Message carries one text payload;
+// this attaches a structured result, progress lines, AND a retry hint to it).
+// Lives in workbench-common so every A2A server module (case-review-agent,
+// policy-agent, and any future module) and the orchestrator share one wire
+// format. retryable is only meaningful when the result represents an error
+// (see §8.2): false for business absence (e.g. case not found), true for
+// technical/transport failure.
+record AgentResponse<T>(T result, List<String> progressLines, boolean retryable) {}
 
 record PolicyRequest(String disputeType) {}
 record PolicyResult(
